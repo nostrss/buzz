@@ -6,6 +6,68 @@ code style, PR process, architecture), see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
 
+## Fork Operations (nostrss/buzz)
+
+> This section applies only to the `nostrss/buzz` fork, which self-hosts a
+> team relay. It does not apply to upstream `block/buzz`.
+
+**Commit policy for agents: commit/push ONLY on the user's explicit
+instruction. When in doubt, ask first — never commit proactively.**
+
+### Branch strategy
+
+- `main` — pure upstream mirror. Receives only merges from
+  `upstream/main` (`block/buzz`). No fork-specific commits.
+- `deploy` — the fork's release branch. All fork-specific commits land
+  here; upstream changes arrive by merging `main` into `deploy` at a
+  reviewed point in time. Unwanted upstream changes are handled by
+  delaying the merge or `git revert` on `deploy` — never by cherry-pick
+  curation.
+
+```bash
+# take upstream changes
+git checkout main && git fetch upstream && git merge upstream/main && git push origin main
+git checkout deploy && git merge main && git push origin deploy   # after review
+
+# fork development
+git checkout deploy  # commit here (with -s), push triggers the image build
+```
+
+### Image pipeline
+
+- Repo variable `GHCR_IMAGE=ghcr.io/nostrss/buzz` points the upstream
+  `docker.yml` at the fork's registry (no workflow fork needed for that).
+- `docker.yml` on `deploy` differs from upstream in two ways: it triggers
+  on the `deploy` branch (not `main`), and it skips the same-SHA CI
+  qualification gate outside `block/buzz` (fork runners cannot reliably
+  run the integration lanes — anonymous Docker Hub pulls are
+  rate-limited). A successful image build alone publishes
+  `ghcr.io/nostrss/buzz:deploy`.
+- Other upstream workflows (Sprig, canaries, etc.) are irrelevant to the
+  fork; their failures on fork pushes can be ignored or the workflows
+  disabled in the Actions UI.
+
+### Production relay
+
+- Single Vultr VPS (Seoul), Ubuntu 24.04 + Docker, serving
+  `wss://app.pegboard.me` (DNS: Cloudflare, proxy OFF / DNS only).
+- Deployment bundle: `deploy/compose/` on the server at
+  `/root/buzz/deploy/compose` with `BUZZ_IMAGE=ghcr.io/nostrss/buzz:deploy`
+  and `BUZZ_COMPOSE_TLS=true` (Caddy + Let's Encrypt).
+- Deploy loop: push to `deploy` → Actions builds the image → on the
+  server `BUZZ_COMPOSE_TLS=true ./run.sh upgrade`.
+- Closed relay: `BUZZ_REQUIRE_RELAY_MEMBERSHIP=true`. Members join via
+  in-app invite links, or `./run.sh add-member <npub>` on the server.
+- The owner key is a server-generated break-glass admin key
+  (`RELAY_OWNER_PUBKEY` in the server `.env`; private half stored on the
+  server only). Back up the server `.env` — losing
+  `BUZZ_RELAY_PRIVATE_KEY` loses the community identity.
+- Desktop: team uses locally built `just desktop-release-build` DMGs
+  (all Apple Silicon) or official upstream releases; both connect to
+  `wss://app.pegboard.me`.
+
+---
+
 ## Product Contract
 
 Before planning or reviewing a non-trivial change:
