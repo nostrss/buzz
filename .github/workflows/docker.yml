@@ -41,7 +41,7 @@ name: Docker image
 
 on:
   push:
-    branches: [main]
+    branches: [main, deploy]
     tags: ["relay-v[0-9]*"]
   pull_request:
     paths:
@@ -265,6 +265,22 @@ jobs:
           if [[ ! "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
             echo "::error::Invalid source SHA: $SOURCE_SHA"
             exit 1
+          fi
+
+          # Fork: publish on successful image build without requiring the
+          # upstream same-SHA CI qualification (fork runners cannot reliably
+          # run the full integration lanes, e.g. anonymous Docker Hub pulls).
+          if [[ "$GITHUB_REPOSITORY" != "block/buzz" ]]; then
+            chart_version=$(awk '/^version:/ { print $2; exit }' deploy/charts/buzz/Chart.yaml)
+            {
+              echo "source_sha=$SOURCE_SHA"
+              echo "ci_run_id=0"
+              echo "ci_run_attempt=0"
+              echo "ci_run_url=https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+              echo "chart_version=$chart_version"
+            } >>"$GITHUB_OUTPUT"
+            echo "Fork repository ${GITHUB_REPOSITORY}: skipping same-SHA CI qualification."
+            exit 0
           fi
 
           deadline=$((SECONDS + 3900))
