@@ -41,7 +41,7 @@ name: Docker image
 
 on:
   push:
-    branches: [main, deploy]
+    branches: [deploy]
     tags: ["relay-v[0-9]*"]
   pull_request:
     paths:
