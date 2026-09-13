@@ -293,6 +293,22 @@ desktop-release-build target="aarch64-apple-darwin":
     pnpm install
     cd {{desktop_dir}} && pnpm tauri build --features mesh-llm --target {{target}}
 
+# Needs APPLE_SIGNING_IDENTITY plus APPLE_API_KEY / APPLE_API_ISSUER / APPLE_API_KEY_PATH
+# for notarization; without the API vars tauri signs but skips notarization.
+# Build a signed + notarized macOS DMG with real sidecars (fork release path).
+desktop-signed-build target="aarch64-apple-darwin":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    TARGET={{target}}
+    : "${APPLE_SIGNING_IDENTITY:?set APPLE_SIGNING_IDENTITY (see: security find-identity -v -p codesigning)}"
+    cargo build --release --target "$TARGET" \
+      -p buzz-acp -p buzz-agent -p buzz-backend-kubernetes -p buzz-dev-mcp \
+      -p git-credential-nostr -p buzz-cli
+    ./scripts/bundle-sidecars.sh "$TARGET"
+    pnpm install
+    cd {{desktop_dir}} && pnpm tauri build --features mesh-llm --target "$TARGET" --bundles dmg
+    ls "src-tauri/target/$TARGET/release/bundle/dmg/"*.dmg
+
 # Build an unsigned named macOS demo DMG with isolated app and runtime identities.
 desktop-demo-build demo_name target="aarch64-apple-darwin":
     #!/usr/bin/env bash
