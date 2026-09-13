@@ -28,6 +28,7 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/shared/ui/sidebar";
+import { hostedAccountUrl } from "@/shared/config/hostedAccount";
 import { SidebarMenuLabel } from "@/shared/ui/sidebar-menu-label";
 import {
   renderSettingsSection,
@@ -148,6 +149,14 @@ export function SettingsView({
       // Open relays have no membership snapshot or invite controls.
       if (s.value === "community-members") {
         return canManageCommunityMembers(myMembershipQuery.data);
+      }
+      // Fork: with the hosted account service the key never leaves the
+      // account, so phone pairing and Builderlab hosting have no surface.
+      if (
+        hostedAccountUrl() &&
+        (s.value === "mobile" || s.value === "hosted-communities")
+      ) {
+        return false;
       }
       return true;
     });

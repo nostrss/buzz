@@ -51,7 +51,8 @@ export type ProfileStepState = {
 export type ProfileStepActions = {
   advanceWithoutSaving: () => void;
   back?: () => void;
-  importExistingKey: () => void;
+  /** Absent when the hosted account service owns the key (fork). */
+  importExistingKey?: () => void;
   clearAvatarDraft: () => void;
   onUploadingChange: (isUploading: boolean) => void;
   skipForNow: () => void;

@@ -22,6 +22,7 @@ import { cn } from "@/shared/lib/cn";
 import { Input } from "@/shared/ui/input";
 import { Spinner } from "@/shared/ui/spinner";
 import { Textarea } from "@/shared/ui/textarea";
+import { hostedAccountUrl } from "@/shared/config/hostedAccount";
 import { PrivateKeyBackupRow } from "./PrivateKeyBackupRow";
 import {
   SettingsOptionGroup,
@@ -801,7 +802,9 @@ export function ProfileSettingsCard({
                                 testId="profile-nip05"
                                 value={nip05Handle}
                               />
-                              <PrivateKeyBackupRow />
+                              {hostedAccountUrl() ? null : (
+                                <PrivateKeyBackupRow />
+                              )}
                             </div>
                           </details>
                         </SettingsOptionGroup>

@@ -1,8 +1,10 @@
 import * as React from "react";
 import { toast } from "sonner";
 
+import { hostedLogout } from "@/features/hosted-account/api";
 import { NsecMaskedDisplay } from "@/features/onboarding/ui/NsecMaskedDisplay";
 import { getNsec, signOut } from "@/shared/api/tauriIdentity";
+import { hostedAccountUrl } from "@/shared/config/hostedAccount";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -41,6 +43,9 @@ export const SIGNOUT_CONFIRM_PHRASE = "wipe all my data";
  * Only when both gates pass does "Delete my data" become clickable.
  */
 export function SignOutSection() {
+  // Fork: with the hosted account service the key lives with the account, so
+  // there is no backup gate and no nsec to show; signing in again restores it.
+  const hostedUrl = hostedAccountUrl();
   const [isOpen, setIsOpen] = React.useState(false);
   const [isPending, setIsPending] = React.useState(false);
 
@@ -48,7 +53,9 @@ export function SignOutSection() {
   const [nsec, setNsec] = React.useState<string | null>(null);
   const [nsecError, setNsecError] = React.useState<string | null>(null);
   const [isNsecLoading, setIsNsecLoading] = React.useState(false);
-  const [hasConfirmedBackup, setHasConfirmedBackup] = React.useState(false);
+  const [hasConfirmedBackup, setHasConfirmedBackup] = React.useState(
+    Boolean(hostedUrl),
+  );
   // Guards against a late-resolving getNsec() repopulating state after the
   // dialog closes.
   const fetchCancelledRef = React.useRef(false);
@@ -65,7 +72,7 @@ export function SignOutSection() {
     setNsec(null);
     setNsecError(null);
     setIsNsecLoading(false);
-    setHasConfirmedBackup(false);
+    setHasConfirmedBackup(Boolean(hostedUrl));
     setConfirmText("");
   }
 
@@ -79,6 +86,7 @@ export function SignOutSection() {
   async function openDialog() {
     setIsOpen(true);
     fetchCancelledRef.current = false;
+    if (hostedUrl) return;
     setIsNsecLoading(true);
     setNsecError(null);
     try {
@@ -99,7 +107,7 @@ export function SignOutSection() {
   function handleSignOut() {
     setIsPending(true);
     // Keep the pending state if signOut() resolves before restart.
-    signOut()
+    (hostedUrl ? hostedLogout(hostedUrl) : signOut())
       .then(() => {
         // Clear web storage for this origin on the success path only. This
         // covers dev builds where the Rust webview wipe targets the
@@ -129,9 +137,9 @@ export function SignOutSection() {
               className="text-sm font-normal text-muted-foreground/70"
               data-settings-subcopy
             >
-              Removes your identity key and all local app data from this device.
-              Before signing out, create and test a password-protected key
-              backup above — this cannot be undone.
+              {hostedUrl
+                ? "Removes all local app data from this device. Sign in again with your email to pick up where you left off."
+                : "Removes your identity key and all local app data from this device. Before signing out, create and test a password-protected key backup above — this cannot be undone."}
             </p>
           </div>
           <Button
@@ -161,13 +169,13 @@ export function SignOutSection() {
           <AlertDialogHeader>
             <AlertDialogTitle>Sign out and wipe all data?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will delete your identity key, all agent settings, and cached
-              data from this device, then relaunch Buzz into first-run setup.
-              This cannot be undone.
+              {hostedUrl
+                ? "This will remove all agent settings and cached data from this device, then relaunch Buzz to the sign-in screen. Your account and its identity stay on the server."
+                : "This will delete your identity key, all agent settings, and cached data from this device, then relaunch Buzz into first-run setup. This cannot be undone."}
             </AlertDialogDescription>
           </AlertDialogHeader>
 
-          <div className="space-y-3">
+          <div className="space-y-3" hidden={Boolean(hostedUrl)}>
             <p className="text-sm font-medium">
               1. Confirm you can restore your identity
             </p>
@@ -210,7 +218,7 @@ export function SignOutSection() {
               className="text-sm font-medium"
               htmlFor="signout-confirm-phrase"
             >
-              2. Type{" "}
+              {hostedUrl ? "Type" : "2. Type"}{" "}
               <span className="font-semibold">"{SIGNOUT_CONFIRM_PHRASE}"</span>{" "}
               to confirm
             </label>

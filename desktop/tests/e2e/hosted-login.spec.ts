@@ -57,7 +57,7 @@ test("email and code sign-in lands on create-or-join with no key screens", async
 
   const welcome = page.getByTestId("hosted-welcome");
   await expect(welcome).toBeVisible();
-  await expect(page.getByTestId("community-choice-create")).toBeDisabled();
+  await expect(page.getByTestId("community-choice-create")).toBeEnabled();
   await expect(page.getByTestId("community-choice-join")).toBeEnabled();
   await expect(page.getByTestId("community-choice-existing")).toHaveCount(0);
   await expect(page.getByText(/identity key/i)).toHaveCount(0);
@@ -169,4 +169,140 @@ test("without the account service URL the upstream onboarding is unchanged", asy
   await expect(page.getByTestId("machine-onboarding-gate")).toBeVisible();
   await expect(page.getByTestId("hosted-login")).toHaveCount(0);
   await expect(page.getByTestId("identity-key-help-trigger")).toBeVisible();
+});
+
+test("creating a community from the name hands off to community onboarding", async ({
+  page,
+}) => {
+  await enableHostedAccount(page);
+  await installMockBridge(
+    page,
+    { profileReadError: "no-kind-0" },
+    { skipCommunitySeed: true, skipOnboardingSeed: true },
+  );
+  await page.goto("/");
+  await signIn(page);
+  await expect(page.getByTestId("hosted-welcome")).toBeVisible();
+
+  await page.getByTestId("community-choice-create").click();
+  const nameInput = page.getByTestId("hosted-community-name");
+  await expect(nameInput).toBeVisible();
+
+  // Name rules are enforced while typing, with the address previewed.
+  await nameInput.fill("My Team");
+  await expect(page.getByTestId("hosted-community-preview")).toHaveText(
+    "my-team.app.test.invalid",
+  );
+  await expect(page.getByTestId("hosted-community-feedback")).toHaveText(
+    "That address is available.",
+  );
+  await nameInput.fill("taken");
+  await expect(page.getByTestId("hosted-community-feedback")).toHaveText(
+    "That address is already taken.",
+  );
+  await expect(page.getByTestId("hosted-community-submit")).toBeDisabled();
+  await nameInput.fill("app");
+  await expect(page.getByTestId("hosted-community-feedback")).toHaveText(
+    "That name is reserved.",
+  );
+
+  await nameInput.fill("my-team");
+  await expect(page.getByTestId("hosted-community-feedback")).toHaveText(
+    "That address is available.",
+  );
+  await page.getByTestId("hosted-community-submit").click();
+
+  // The upstream add-community onboarding takes over from here.
+  await expect(page.getByTestId("community-onboarding-flow")).toBeVisible();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        (key) => window.localStorage.getItem(key),
+        TRANSACTION_STORAGE_KEY,
+      ),
+    )
+    .toContain('"relayUrl":"wss://my-team.app.test.invalid"');
+});
+
+test("an account that already owns a community connects to it and cannot create a second", async ({
+  page,
+}) => {
+  await enableHostedAccount(page);
+  await page.addInitScript((key) => {
+    window.localStorage.setItem(
+      key,
+      JSON.stringify({
+        email: "jin@x.io",
+        communityHost: "first.app.test.invalid",
+      }),
+    );
+  }, HOSTED_SESSION_KEY);
+  await installMockBridge(
+    page,
+    { profileReadError: "no-kind-0" },
+    { skipCommunitySeed: true, skipOnboardingSeed: true },
+  );
+  await page.goto("/");
+
+  // A new machine for an account that owns a community connects to it.
+  await expect(page.getByTestId("community-onboarding-flow")).toBeVisible();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        (key) => window.localStorage.getItem(key),
+        TRANSACTION_STORAGE_KEY,
+      ),
+    )
+    .toContain('"relayUrl":"wss://first.app.test.invalid"');
+
+  // Backing out lands on create-or-join, where a second community is refused.
+  await page.getByTestId("community-profile-back").click();
+  await expect(page.getByTestId("hosted-welcome")).toBeVisible();
+  await expect(page.getByTestId("community-choice-create")).toBeDisabled();
+  await expect(page.getByTestId("community-create-limit")).toContainText(
+    "first.app.test.invalid",
+  );
+});
+
+test("hosted mode hides every key surface in settings and routes sign-out", async ({
+  page,
+}) => {
+  await enableHostedAccount(page);
+  await page.addInitScript((key) => {
+    window.localStorage.setItem(key, JSON.stringify({ email: "jin@x.io" }));
+  }, HOSTED_SESSION_KEY);
+  // Default seed: a community is configured and onboarding is complete.
+  await installMockBridge(page);
+  await page.goto("/");
+
+  await page.getByTestId("open-settings").click();
+  await page.getByTestId("profile-popover-settings").click();
+  await expect(page.getByTestId("settings-nav-profile")).toBeVisible();
+  await expect(page.getByTestId("settings-nav-mobile")).toHaveCount(0);
+  await expect(page.getByTestId("settings-nav-hosted-communities")).toHaveCount(
+    0,
+  );
+
+  // Identity details show the public key but no private-key backup row.
+  await page.getByTestId("profile-identity-toggle").click();
+  await expect(page.getByTestId("profile-pubkey")).toBeVisible();
+  await expect(page.getByTestId("profile-private-key-row")).toHaveCount(0);
+
+  // Sign-out asks only for the typed phrase; no nsec is fetched or shown.
+  await page.getByTestId("signout-open-dialog").click();
+  await expect(page.getByTestId("signout-confirm-phrase")).toBeVisible();
+  await expect(page.getByTestId("nsec-value")).toHaveCount(0);
+  await expect(page.getByTestId("signout-backup-confirm")).toBeHidden();
+  await expect(page.getByTestId("signout-confirm")).toBeDisabled();
+  await page.getByTestId("signout-confirm-phrase").fill("wipe all my data");
+  await expect(page.getByTestId("signout-confirm")).toBeEnabled();
+  await page.getByTestId("signout-confirm").click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        (key) => window.localStorage.getItem(key),
+        HOSTED_SESSION_KEY,
+      ),
+    )
+    .toBeNull();
 });

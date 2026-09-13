@@ -309,7 +309,7 @@ export function ProfileStep({
           </Button>
         ) : null}
 
-        {!usesExistingIdentity ? (
+        {!usesExistingIdentity && importExistingKey ? (
           <Button
             className="text-muted-foreground hover:text-accent-foreground"
             data-testid="onboarding-import-key"

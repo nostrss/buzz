@@ -30,6 +30,7 @@ import {
   type OnboardingTransitionDirection,
   OnboardingSlideTransition,
 } from "./OnboardingSlideTransition";
+import { hostedAccountUrl } from "@/shared/config/hostedAccount";
 import { ProfileStep } from "./ProfileStep";
 import type {
   OnboardingActions,
@@ -550,7 +551,10 @@ export function OnboardingFlow({
                 actions={{
                   advanceWithoutSaving: advanceFromProfileWithoutSaving,
                   clearAvatarDraft: resetAvatarDraft,
-                  importExistingKey: showKeyImportPage,
+                  // Fork: the hosted account owns the key; no manual import.
+                  importExistingKey: hostedAccountUrl()
+                    ? undefined
+                    : showKeyImportPage,
                   onUploadingChange: setIsUploadingAvatar,
                   skipForNow,
                   submit: () => {
