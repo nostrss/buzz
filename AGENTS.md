@@ -827,3 +827,19 @@ persistent automatic addresses. Use the returned label from registration for
 insert/restore/remove. Ambiguous manually typed names must fail visibly without
 clearing the draft in chat, edit, and standalone forum consumers; never fan out
 silently to all identities sharing a name. See `docs/mention-editor.md`.
+
+---
+
+## Agent skills
+
+### Issue tracker
+
+Issues and specs live as local markdown under `.scratch/<feature>/` (gitignored — planning stays off the public fork). See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default vocabulary: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `CONTEXT.md` at the repo root plus `docs/adr/`. See `docs/agents/domain.md`.
