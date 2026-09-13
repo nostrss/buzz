@@ -1,0 +1,29 @@
+[package]
+name        = "buzz-account"
+description = "Hosted-service account service: email login, identity-key custody, community provisioning"
+version.workspace      = true
+edition.workspace      = true
+rust-version.workspace = true
+license.workspace      = true
+repository.workspace   = true
+
+[lib]
+name = "buzz_account"
+path = "src/lib.rs"
+
+[[bin]]
+name = "buzz-account"
+path = "src/main.rs"
+
+[dependencies]
+anyhow             = { workspace = true }
+axum               = { workspace = true }
+base64             = { workspace = true }
+nostr              = { workspace = true }
+serde_json         = { workspace = true }
+sqlx               = { workspace = true }
+thiserror          = { workspace = true }
+tokio              = { workspace = true }
+tracing            = { workspace = true }
+tracing-subscriber = { workspace = true }
+url                = { workspace = true }

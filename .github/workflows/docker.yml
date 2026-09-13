@@ -47,6 +47,7 @@ on:
     paths:
       - "Dockerfile"
       - "Dockerfile.push-gateway"
+      - "Dockerfile.account"
       - ".dockerignore"
       - ".github/workflows/docker.yml"
       - "deploy/charts/buzz/Chart.yaml"
@@ -669,10 +670,112 @@ jobs:
   # workflow_run only fires from the default branch's workflow file.
   # Secrets: DEPLOY_SSH_KEY (private key registered on the host),
   #          DEPLOY_HOST (host or IP).
+  # Fork-only: the hosted-service account service image, published next to
+  # the relay image as <GHCR_IMAGE>-account (ghcr.io/nostrss/buzz-account).
+  account-build:
+    name: Build account service (${{ matrix.platform }})
+    if: github.repository != 'block/buzz' && github.event_name != 'pull_request'
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-24.04
+            arch: amd64
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            arch: arm64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+        with:
+          persist-credentials: false
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5  # v4.1.0
+        with:
+          buildkitd-config-inline: |
+            [worker.oci]
+              max-parallelism = 2
+      - name: Log in to GHCR
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee  # v4.2.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf  # v7.2.0
+        with:
+          context: .
+          file: ./Dockerfile.account
+          platforms: ${{ matrix.platform }}
+          outputs: type=image,name=${{ env.IMAGE_NAME }}-account,push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=registry,ref=${{ env.IMAGE_NAME }}-account-buildcache:${{ matrix.arch }}
+          cache-to: type=registry,ref=${{ env.IMAGE_NAME }}-account-buildcache:${{ matrix.arch }},mode=max,compression=zstd
+      - name: Export digest
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: mkdir -p /tmp/account-digests && touch "/tmp/account-digests/${DIGEST#sha256:}"
+      - name: Upload digest
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: account-digests-${{ matrix.arch }}
+          path: /tmp/account-digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  account-merge:
+    name: Publish account service image
+    if: github.repository != 'block/buzz' && github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    needs: account-build
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Download per-arch digests
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          path: /tmp/account-digests
+          pattern: account-digests-*
+          merge-multiple: true
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5  # v4.1.0
+      - name: Log in to GHCR
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee  # v4.2.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9  # v6.1.0
+        with:
+          images: ${{ env.IMAGE_NAME }}-account
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix=sha-,format=short
+      - name: Merge and publish manifest
+        working-directory: /tmp/account-digests
+        env:
+          META_TAGS: ${{ steps.meta.outputs.tags }}
+          IMAGE: ${{ env.IMAGE_NAME }}-account
+        run: |
+          set -euo pipefail
+          tags=(); while IFS= read -r tag; do [ -n "$tag" ] && tags+=("-t" "$tag"); done <<< "$META_TAGS"
+          digests=(); for digest in *; do digests+=("${IMAGE}@sha256:${digest}"); done
+          docker buildx imagetools create "${tags[@]}" "${digests[@]}"
+
   deploy:
     name: Deploy relay to host
     if: github.repository != 'block/buzz' && github.event_name == 'push' && github.ref == 'refs/heads/deploy'
-    needs: merge
+    needs: [merge, account-merge]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     concurrency:

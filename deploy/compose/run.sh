@@ -33,6 +33,17 @@ Generate stable secrets first; these values must not rotate on restart.
 MSG
     exit 1
   fi
+  if [[ ! -f .env.account ]]; then
+    cat >&2 <<'MSG'
+Missing deploy/compose/.env.account (account service secrets).
+Copy .env.account.example to .env.account and replace every CHANGE_ME value.
+MSG
+    exit 1
+  fi
+  if grep -Eq '^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*=.*CHANGE_ME' .env.account; then
+    echo "deploy/compose/.env.account still contains CHANGE_ME placeholders." >&2
+    exit 1
+  fi
 }
 
 backup_hint() {
@@ -40,6 +51,7 @@ backup_hint() {
 Back up these before upgrades and on a regular schedule:
 
 - deploy/compose/.env, especially BUZZ_RELAY_PRIVATE_KEY, DB/Redis/S3 secrets, and BUZZ_GIT_HOOK_HMAC_SECRET
+- deploy/compose/.env.account, especially ACCOUNT_MASTER_KEY (losing it loses every stored identity key)
 - The owner private key if bootstrap generated one for RELAY_OWNER_PUBKEY
 - Postgres data (prefer pg_dump or a quiesced volume snapshot)
 - MinIO/S3 bucket contents for media and git objects

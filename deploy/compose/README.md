@@ -9,6 +9,8 @@ the root `docker-compose.yml`, which remains local development infrastructure.
 cd deploy/compose
 cp .env.example .env
 $EDITOR .env       # replace every CHANGE_ME value
+cp .env.account.example .env.account
+$EDITOR .env.account   # account service secrets (fork-only; never loaded into the relay)
 ./run.sh start
 ```
 

@@ -48,6 +48,35 @@ services:
     networks:
       - buzz-net
 
+  # Fork-only: hosted-service account service (email login, identity-key
+  # custody, community provisioning). Secrets come from .env.account, which is
+  # deliberately not loaded into the relay container.
+  account:
+    image: ${BUZZ_ACCOUNT_IMAGE:-ghcr.io/nostrss/buzz-account:deploy}
+    env_file:
+      - .env.account
+    environment:
+      ACCOUNT_BIND_ADDR: 0.0.0.0:3100
+      ACCOUNT_DATABASE_URL: postgres://${POSTGRES_USER:-buzz}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/${ACCOUNT_POSTGRES_DB:-buzz_account}
+      ACCOUNT_RELAY_URL: http://relay:3000
+      RUST_LOG: ${ACCOUNT_RUST_LOG:-buzz_account=info}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "bash -ec 'exec 3<>/dev/tcp/127.0.0.1/3100; printf \"GET /_readiness HTTP/1.1\\r\\nHost: 127.0.0.1\\r\\nConnection: close\\r\\n\\r\\n\" >&3; grep -q \"200 OK\" <&3'",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - buzz-net
+
   postgres:
     image: postgres:17-alpine
     environment:
