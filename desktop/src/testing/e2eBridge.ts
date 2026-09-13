@@ -1700,6 +1700,22 @@ let mockIdentityLostCleared = false;
 // Same pattern for `mock.identityLocked`.
 let mockIdentityLockedCleared = false;
 
+// ── Fork: hosted account service (email + code login) ──────────────────────
+// Only reachable when a spec sets `window.__BUZZ_E2E_HOSTED_ACCOUNT_URL__`.
+// The session survives reloads through localStorage so "app restart skips
+// login" can be exercised; wrong-code attempts reset per page load.
+const HOSTED_MOCK_CODE = "123456";
+const HOSTED_MOCK_SESSION_KEY = "buzz-e2e-hosted-session";
+let hostedMockAttempts = 0;
+function readHostedMockSession(): { email: string } | null {
+  try {
+    const raw = window.localStorage.getItem(HOSTED_MOCK_SESSION_KEY);
+    return raw ? (JSON.parse(raw) as { email: string }) : null;
+  } catch {
+    return null;
+  }
+}
+
 // ── get_event defer/release seam ────────────────────────────────────────────
 // When `window.__BUZZ_E2E_DEFER_GET_EVENT__` is set to a target event ID,
 // `handleGetEvent` holds calls for that ID in this queue.  All other event IDs
@@ -12621,6 +12637,47 @@ export function maybeInstallE2eTauriMocks() {
         // Production wipes local state and restarts the app. In the browser
         // harness there is nothing to wipe; resolving is enough — specs
         // assert invocation via __BUZZ_E2E_COMMANDS__ and the pending UI.
+        return;
+      case "hosted_login_start": {
+        const request = payload as { email?: string } | null;
+        const email = request?.email?.trim().toLowerCase() ?? "";
+        if (!email.includes("@")) return { error: "invalid_email" };
+        hostedMockAttempts = 0;
+        return { status: "sent" };
+      }
+      case "hosted_login_verify": {
+        const request = payload as { email?: string; code?: string } | null;
+        const email = request?.email?.trim().toLowerCase() ?? "";
+        if (request?.code !== HOSTED_MOCK_CODE) {
+          hostedMockAttempts += 1;
+          return {
+            error: "invalid_code",
+            remaining_attempts: Math.max(0, 5 - hostedMockAttempts),
+          };
+        }
+        const imported = importMockIdentity(
+          nsecEncode(hexToBytes(DEFAULT_REAL_IDENTITY.privateKey)),
+        );
+        mockIdentityLostCleared = true;
+        mockIdentityLockedCleared = true;
+        window.localStorage.setItem(
+          HOSTED_MOCK_SESSION_KEY,
+          JSON.stringify({ email }),
+        );
+        return { pubkey: imported.pubkey, communities: [] };
+      }
+      case "hosted_session_me": {
+        const session = readHostedMockSession();
+        if (!session) return null;
+        return {
+          email: session.email,
+          pubkey: identity?.pubkey ?? DEFAULT_MOCK_IDENTITY.pubkey,
+          communities: [],
+          can_create_community: true,
+        };
+      }
+      case "hosted_logout":
+        window.localStorage.removeItem(HOSTED_MOCK_SESSION_KEY);
         return;
       case "generate_backup_passphrase": {
         const request = payload as {

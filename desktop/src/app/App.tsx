@@ -58,6 +58,9 @@ import {
   requestAddCommunityPrefill,
 } from "@/features/communities/addCommunityPrefill";
 import { WelcomeSetup } from "@/features/communities/ui/WelcomeSetup";
+import { HostedLoginFlow } from "@/features/hosted-account/ui/HostedLoginFlow";
+import { HostedWelcome } from "@/features/hosted-account/ui/HostedWelcome";
+import { hostedAccountUrl } from "@/shared/config/hostedAccount";
 import { CommunityApplyErrorScreen } from "@/features/communities/ui/CommunityApplyErrorScreen";
 import { CommunityChangeOverlay } from "@/features/communities/ui/CommunityChangeOverlay";
 import { setAvatarProfileSyncQueryClient } from "@/features/profile/avatarProfileSync";
@@ -586,8 +589,13 @@ function CommunityApp({
   let appContent: ReactNode = null;
   if (!transaction) {
     if (community.needsSetup) {
-      // Show welcome setup for first-run users with no communities
-      appContent = (
+      // Show welcome setup for first-run users with no communities.
+      // Fork: with the hosted account service configured, the choice is
+      // create-or-join only (no key or reconnect pages).
+      const hostedUrl = hostedAccountUrl();
+      appContent = hostedUrl ? (
+        <HostedWelcome accountUrl={hostedUrl} />
+      ) : (
         <WelcomeSetup
           initialPage={resumeFirstCommunityPage ?? undefined}
           onBack={
@@ -780,6 +788,25 @@ function MachineBootstrap({ sharedIdentity }: { sharedIdentity: boolean }) {
     transaction?.source === "deep-link-join" ||
     transaction?.source === "deep-link-connect";
   const shouldAcknowledgeDeepLink = isDeepLink && !transaction.acknowledged;
+
+  // Fork: email + code login replaces the identity-key onboarding when the
+  // hosted account service is configured. Reopening the machine config page
+  // from settings still uses the upstream flow.
+  const hostedUrl = hostedAccountUrl();
+  if (hostedUrl && machineInitialPage === undefined) {
+    return (
+      <>
+        <HostedLoginFlow
+          accountUrl={hostedUrl}
+          complete={completeMachineOnboarding}
+          continueWithIdentity={machine.continueWithIdentity}
+          hasCommunity={Boolean(activeCommunity)}
+          queryClient={machine.queryClient}
+        />
+        {shouldAcknowledgeDeepLink ? <PendingInviteGate /> : null}
+      </>
+    );
+  }
 
   return (
     <>
