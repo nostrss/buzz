@@ -200,3 +200,54 @@ pub async fn hosted_logout(base_url: String, app: tauri::AppHandle) -> Result<()
     }
     super::identity::sign_out(app).await
 }
+
+async fn authenticated_post(
+    base_url: &str,
+    path: &str,
+    body: serde_json::Value,
+) -> Result<serde_json::Value, String> {
+    let Some(token) = load_session_token() else {
+        return Ok(serde_json::json!({ "error": "missing_token" }));
+    };
+    let (status, body) = send_json(
+        client()?
+            .post(api_url(base_url, path)?)
+            .bearer_auth(&token)
+            .json(&body),
+    )
+    .await?;
+    if status == reqwest::StatusCode::UNAUTHORIZED {
+        let _ = session_store().delete(SESSION_KEY);
+    }
+    Ok(body)
+}
+
+/// Normalize a community name and ask whether its host is free.
+#[tauri::command]
+pub async fn hosted_community_check(
+    base_url: String,
+    name: String,
+) -> Result<serde_json::Value, String> {
+    authenticated_post(
+        &base_url,
+        "/v1/communities/check",
+        serde_json::json!({ "name": name }),
+    )
+    .await
+}
+
+/// Create the account's community on the relay. Returns `{host, relay_url,
+/// community_id}` or a structured error (`community_limit_reached`,
+/// `host_taken`, `invalid_name`, `relay_error`).
+#[tauri::command]
+pub async fn hosted_community_create(
+    base_url: String,
+    name: String,
+) -> Result<serde_json::Value, String> {
+    authenticated_post(
+        &base_url,
+        "/v1/communities",
+        serde_json::json!({ "name": name }),
+    )
+    .await
+}

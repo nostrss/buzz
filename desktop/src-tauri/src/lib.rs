@@ -541,6 +541,8 @@ pub fn run() {
             commands::hosted_login_verify,
             commands::hosted_session_me,
             commands::hosted_logout,
+            commands::hosted_community_check,
+            commands::hosted_community_create,
             start_builderlab_login,
             cancel_builderlab_login,
             get_builderlab_auth,

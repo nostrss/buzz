@@ -1706,11 +1706,13 @@ let mockIdentityLockedCleared = false;
 // login" can be exercised; wrong-code attempts reset per page load.
 const HOSTED_MOCK_CODE = "123456";
 const HOSTED_MOCK_SESSION_KEY = "buzz-e2e-hosted-session";
+const HOSTED_MOCK_DOMAIN = "app.test.invalid";
 let hostedMockAttempts = 0;
-function readHostedMockSession(): { email: string } | null {
+type HostedMockSession = { email: string; communityHost?: string };
+function readHostedMockSession(): HostedMockSession | null {
   try {
     const raw = window.localStorage.getItem(HOSTED_MOCK_SESSION_KEY);
-    return raw ? (JSON.parse(raw) as { email: string }) : null;
+    return raw ? (JSON.parse(raw) as HostedMockSession) : null;
   } catch {
     return null;
   }
@@ -12669,11 +12671,43 @@ export function maybeInstallE2eTauriMocks() {
       case "hosted_session_me": {
         const session = readHostedMockSession();
         if (!session) return null;
+        const owned = session.communityHost
+          ? [{ host: session.communityHost, role: "owner" }]
+          : [];
         return {
           email: session.email,
           pubkey: identity?.pubkey ?? DEFAULT_MOCK_IDENTITY.pubkey,
-          communities: [],
-          can_create_community: true,
+          communities: owned,
+          can_create_community: owned.length === 0,
+        };
+      }
+      case "hosted_community_check": {
+        const name = (payload as { name?: string })?.name ?? "";
+        const host = `${name}.${HOSTED_MOCK_DOMAIN}`;
+        const taken = name === "taken";
+        return {
+          name,
+          normalized: name,
+          host,
+          available: !taken,
+          ...(taken ? { reason: "taken" } : {}),
+        };
+      }
+      case "hosted_community_create": {
+        const session = readHostedMockSession();
+        if (!session) return { error: "missing_token" };
+        if (session.communityHost) return { error: "community_limit_reached" };
+        const name = (payload as { name?: string })?.name ?? "";
+        if (name === "taken") return { error: "host_taken" };
+        const host = `${name}.${HOSTED_MOCK_DOMAIN}`;
+        window.localStorage.setItem(
+          HOSTED_MOCK_SESSION_KEY,
+          JSON.stringify({ ...session, communityHost: host }),
+        );
+        return {
+          host,
+          relay_url: `wss://${host}`,
+          community_id: `mock-community-${name}`,
         };
       }
       case "hosted_logout":

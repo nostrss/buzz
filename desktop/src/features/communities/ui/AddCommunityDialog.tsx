@@ -3,7 +3,12 @@ import { ArrowLeft, ChevronRight, Link2, Plus } from "lucide-react";
 
 import type { AddCommunityPrefillRequest } from "@/features/communities/addCommunityPrefill";
 import { HostedCommunityCreateFlow } from "@/features/communities/ui/HostedCommunityCreateFlow";
+import { HostedCommunityCreate } from "@/features/hosted-account/ui/HostedCommunityCreate";
 import { useCommunityOnboarding } from "@/features/onboarding/communityOnboarding";
+import {
+  hostedAccountUrl,
+  hostedCommunityDomain,
+} from "@/shared/config/hostedAccount";
 import { InviteRedeemForm } from "@/features/onboarding/ui/InviteRedeemForm";
 import {
   Dialog,
@@ -187,6 +192,13 @@ export function AddCommunityDialog({
                 startConnection({ relayUrl, inviteCode, policyReceipt })
               }
               variant="add-community"
+            />
+          ) : hostedAccountUrl() ? (
+            // Fork: creation goes through the account service, not Builderlab.
+            <HostedCommunityCreate
+              accountUrl={hostedAccountUrl() ?? ""}
+              communityDomain={hostedCommunityDomain()}
+              onComplete={handleClose}
             />
           ) : (
             <HostedCommunityCreateFlow onComplete={handleClose} />

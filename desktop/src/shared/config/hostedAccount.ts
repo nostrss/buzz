@@ -18,3 +18,17 @@ export function hostedAccountUrl(): string | null {
     ? configured.trim().replace(/\/+$/, "")
     : null;
 }
+
+/**
+ * Domain communities are created under, derived from the account service
+ * host by convention (`auth.<domain>` → `<domain>`).
+ */
+export function hostedCommunityDomain(): string | null {
+  const url = hostedAccountUrl();
+  if (!url) return null;
+  try {
+    return new URL(url).hostname.replace(/^auth\./, "");
+  } catch {
+    return null;
+  }
+}

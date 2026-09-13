@@ -1,8 +1,14 @@
 import * as React from "react";
 
-import { hostedLogout } from "@/features/hosted-account/api";
+import {
+  type HostedMe,
+  hostedLogout,
+  hostedSessionMe,
+} from "@/features/hosted-account/api";
+import { HostedCommunityCreate } from "@/features/hosted-account/ui/HostedCommunityCreate";
 import { useCommunityOnboarding } from "@/features/onboarding/communityOnboarding";
 import { InviteRedeemForm } from "@/features/onboarding/ui/InviteRedeemForm";
+import { hostedCommunityDomain } from "@/shared/config/hostedAccount";
 import { useSystemColorScheme } from "@/shared/theme/useSystemColorScheme";
 import { Card } from "@/shared/ui/card";
 import { StartupWindowDragRegion } from "@/shared/ui/StartupWindowDragRegion";
@@ -15,16 +21,36 @@ type HostedWelcomeProps = {
 };
 
 /**
- * Fork-only first screen after email login when the account has no
- * community yet: create one, or paste an invite link. Creation lands in
- * ticket 05; until then the card is disabled.
+ * Fork-only first screen after email login when this machine has no
+ * community yet: create one (one per account), or paste an invite link.
  */
 export function HostedWelcome({ accountUrl }: HostedWelcomeProps) {
   const systemColorScheme = useSystemColorScheme();
   const communityOnboarding = useCommunityOnboarding();
-  const [page, setPage] = React.useState<"choose" | "join">("choose");
+  const [page, setPage] = React.useState<"choose" | "create" | "join">(
+    "choose",
+  );
+  const [me, setMe] = React.useState<HostedMe | null | undefined>(undefined);
   const [signingOut, setSigningOut] = React.useState(false);
   const [signOutError, setSignOutError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    void hostedSessionMe(accountUrl)
+      .then((result) => {
+        if (!cancelled) setMe(result);
+      })
+      .catch(() => {
+        if (!cancelled) setMe(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [accountUrl]);
+
+  const canCreate =
+    me === undefined ? false : (me?.can_create_community ?? true);
+  const ownedHost = me?.communities[0]?.host ?? null;
 
   const startConnection = React.useCallback(
     (relayUrl: string) => {
@@ -83,16 +109,27 @@ export function HostedWelcome({ accountUrl }: HostedWelcomeProps) {
               </p>
             </div>
             <div className="flex w-full flex-col items-center justify-center gap-12 py-16">
-              <Card asChild className={CARD_CLASS} variant="textured">
-                <button
-                  data-testid="community-choice-create"
-                  disabled
-                  title="Coming soon"
-                  type="button"
-                >
-                  Create a community
-                </button>
-              </Card>
+              <div className="flex w-full flex-col items-center gap-2">
+                <Card asChild className={CARD_CLASS} variant="textured">
+                  <button
+                    data-testid="community-choice-create"
+                    disabled={!canCreate}
+                    onClick={() => setPage("create")}
+                    type="button"
+                  >
+                    Create a community
+                  </button>
+                </Card>
+                {me !== undefined && !canCreate ? (
+                  <p
+                    className="max-w-[320px] text-xs leading-5 text-muted-foreground"
+                    data-testid="community-create-limit"
+                  >
+                    Each account can create one community
+                    {ownedHost ? ` — yours is ${ownedHost}` : ""}.
+                  </p>
+                ) : null}
+              </div>
               <Card asChild className={CARD_CLASS} variant="textured">
                 <button
                   data-testid="community-choice-join"
@@ -118,6 +155,23 @@ export function HostedWelcome({ accountUrl }: HostedWelcomeProps) {
               >
                 {signingOut ? "Signing out…" : "Sign out"}
               </button>
+            </div>
+          </>
+        ) : page === "create" ? (
+          <>
+            <div className="w-full max-w-[760px]">
+              <h1 className="text-title font-normal">Name your community</h1>
+              <p className="mt-3 text-sm leading-6 text-foreground/80">
+                The name becomes your community’s address.
+              </p>
+            </div>
+            <div className="flex w-full flex-col items-center py-12">
+              <HostedCommunityCreate
+                accountUrl={accountUrl}
+                communityDomain={hostedCommunityDomain()}
+                onCancel={() => setPage("choose")}
+                onComplete={() => setPage("choose")}
+              />
             </div>
           </>
         ) : (
