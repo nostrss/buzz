@@ -834,7 +834,7 @@ silently to all identities sharing a name. See `docs/mention-editor.md`.
 
 ### Issue tracker
 
-Issues and specs live as local markdown under `.scratch/<feature>/` (gitignored — planning stays off the public fork). See `docs/agents/issue-tracker.md`.
+Issues and specs live as local markdown under `docs/plans/<feature>/` (committed; the fork is public). See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
