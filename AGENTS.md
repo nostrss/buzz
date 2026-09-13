@@ -47,13 +47,17 @@ git checkout deploy  # commit here (with -s), push triggers the image build
   run the integration lanes — anonymous Docker Hub pulls are
   rate-limited); and the push-gateway jobs are gated to `block/buzz`.
   A successful image build alone publishes `ghcr.io/nostrss/buzz:deploy`.
-- `deploy.yml` (fork-only) runs after a successful "Docker image" run on
-  `deploy`: SSH to the host (`DEPLOY_SSH_KEY` / `DEPLOY_HOST` secrets),
-  `./run.sh upgrade`, then poll `/_readiness`. So `git push origin deploy`
-  is a production deploy.
-- Only "Docker image" and "Deploy relay" trigger on `deploy`. The other
-  upstream workflows trigger on `main`, which is why upstream syncs are
-  pushed with `[skip ci]` (see above).
+- The fork-only `deploy` job at the end of `docker.yml` runs after the
+  merged image is published on a `deploy` push: SSH to the host
+  (`DEPLOY_SSH_KEY` / `DEPLOY_HOST` secrets), `./run.sh upgrade`, then poll
+  `/_readiness`. So `git push origin deploy` is a production deploy. It is
+  a job in `docker.yml` rather than a `workflow_run` workflow because
+  `workflow_run` only fires from the default branch's workflow file.
+- Only "Docker image" triggers on `deploy`. The other upstream workflows
+  trigger on `main`, which is why upstream syncs are pushed with
+  `[skip ci]` (see above). Beware: `[skip ci]` anywhere in a commit
+  message — including the body — skips the workflows for that push, so
+  never mention it literally in a `deploy` commit.
 
 ### Production relay
 

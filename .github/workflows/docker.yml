@@ -663,3 +663,44 @@ jobs:
             printf 'gh attestation verify oci://ghcr.io/block/buzz-push-gateway@%s --owner block\n' "$GATEWAY_DIGEST"
             echo "\`\`\`"
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # Fork-only: roll the production relay forward once the merged image is
+  # published. Lives here (not in a workflow_run workflow) because
+  # workflow_run only fires from the default branch's workflow file.
+  # Secrets: DEPLOY_SSH_KEY (private key registered on the host),
+  #          DEPLOY_HOST (host or IP).
+  deploy:
+    name: Deploy relay to host
+    if: github.repository != 'block/buzz' && github.event_name == 'push' && github.ref == 'refs/heads/deploy'
+    needs: merge
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    concurrency:
+      group: deploy-relay
+      cancel-in-progress: false
+    permissions: {}
+    steps:
+      - name: Upgrade relay over SSH
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          HOST: ${{ secrets.DEPLOY_HOST }}
+        run: |
+          set -euo pipefail
+          install -m 600 /dev/null key
+          printf '%s\n' "$SSH_KEY" > key
+          ssh -i key -o StrictHostKeyChecking=accept-new -o ConnectTimeout=20 "root@$HOST" \
+            'cd /root/buzz/deploy/compose && BUZZ_COMPOSE_TLS=true ./run.sh upgrade'
+          rm -f key
+
+      - name: Verify relay health
+        run: |
+          set -euo pipefail
+          for _ in $(seq 1 12); do
+            if curl -fsS --max-time 10 "https://app.pegboard.me/_readiness" | grep -q '"ready"'; then
+              echo "relay ready"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::relay did not become ready after upgrade"
+          exit 1
