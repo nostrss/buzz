@@ -44,11 +44,23 @@ async fn ensure_database(database_url: &str) -> anyhow::Result<()> {
     if exists.is_none() {
         tracing::info!(database = %db_name, "creating account database");
         // Identifier validated above; CREATE DATABASE cannot take a bind parameter.
-        sqlx::raw_sql(sqlx::AssertSqlSafe(format!(
+        let created = sqlx::raw_sql(sqlx::AssertSqlSafe(format!(
             "CREATE DATABASE \"{db_name}\""
         )))
         .execute(&admin)
-        .await?;
+        .await;
+        if let Err(error) = created {
+            // Two instances booting at once (or parallel tests) race here;
+            // whoever lost the race is fine as long as the database now exists.
+            let now_exists: Option<i32> =
+                sqlx::query_scalar("SELECT 1 FROM pg_database WHERE datname = $1")
+                    .bind(&db_name)
+                    .fetch_optional(&admin)
+                    .await?;
+            if now_exists.is_none() {
+                return Err(error.into());
+            }
+        }
     }
     admin.close().await;
     Ok(())

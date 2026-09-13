@@ -16,14 +16,27 @@ name = "buzz-account"
 path = "src/main.rs"
 
 [dependencies]
+aes-gcm            = "0.10"
 anyhow             = { workspace = true }
 axum               = { workspace = true }
 base64             = { workspace = true }
+chrono             = { workspace = true }
+hex                = { workspace = true }
 nostr              = { workspace = true }
+reqwest            = { workspace = true }
+# Explicit ring provider so rustls can pick one at startup (mirrors buzz-cli).
+rustls             = { version = "0.23", default-features = false, features = ["ring", "std"] }
+serde              = { workspace = true }
 serde_json         = { workspace = true }
+sha2               = { workspace = true }
 sqlx               = { workspace = true }
+subtle             = { workspace = true }
 thiserror          = { workspace = true }
 tokio              = { workspace = true }
 tracing            = { workspace = true }
 tracing-subscriber = { workspace = true }
 url                = { workspace = true }
+uuid               = { workspace = true }
+
+[dev-dependencies]
+reqwest = { workspace = true }

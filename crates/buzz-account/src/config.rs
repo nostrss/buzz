@@ -21,6 +21,8 @@ pub struct Config {
     pub master_key: [u8; 32],
     /// Resend API key. `RESEND_API_KEY`.
     pub resend_api_key: String,
+    /// Resend API base. `RESEND_BASE_URL`, default `https://api.resend.com/`; tests point it at a fake.
+    pub resend_base_url: url::Url,
     /// Sender address for login codes. `ACCOUNT_EMAIL_FROM`.
     pub email_from: String,
     /// Domain suffix communities are created under, e.g. `app.pegboard.me`. `ACCOUNT_COMMUNITY_DOMAIN`.
@@ -81,6 +83,13 @@ impl Config {
                 invalid("ACCOUNT_OPERATOR_SECRET_KEY")(&"expected a 64-hex or nsec secret key")
             })?;
 
+        let resend_base_url = url::Url::parse(
+            env.get("RESEND_BASE_URL")
+                .map(String::as_str)
+                .unwrap_or("https://api.resend.com/"),
+        )
+        .map_err(|e| invalid("RESEND_BASE_URL")(&e))?;
+
         let master_key = STANDARD
             .decode(required("ACCOUNT_MASTER_KEY")?)
             .map_err(|e| invalid("ACCOUNT_MASTER_KEY")(&e))?;
@@ -105,6 +114,7 @@ impl Config {
             operator_keys,
             master_key,
             resend_api_key: required("RESEND_API_KEY")?.to_owned(),
+            resend_base_url,
             email_from: required("ACCOUNT_EMAIL_FROM")?.to_owned(),
             community_domain,
         })
