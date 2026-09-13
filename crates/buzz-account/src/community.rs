@@ -290,16 +290,22 @@ pub async fn create(
 
 #[derive(Deserialize)]
 pub struct HostQuery {
-    pub host: String,
+    pub host: Option<String>,
+    /// Caddy's on-demand TLS `ask` sends `?domain=`.
+    pub domain: Option<String>,
 }
 
-/// `GET /v1/hosts/check?host=`: Caddy on-demand TLS `ask`. 200 only for the
-/// service hosts and hosts this service created.
+/// `GET /v1/hosts/check?host=` (or `?domain=`, as Caddy sends it): on-demand
+/// TLS `ask`. 200 only for the service hosts and hosts this service created.
 pub async fn hosts_check(
     State(state): State<AppState>,
     Query(q): Query<HostQuery>,
 ) -> Result<StatusCode, ApiError> {
-    let host = q.host.trim().trim_end_matches('.').to_ascii_lowercase();
+    let raw = q
+        .host
+        .or(q.domain)
+        .ok_or_else(|| ApiError::bad_request("missing_host"))?;
+    let host = raw.trim().trim_end_matches('.').to_ascii_lowercase();
     let domain = &state.config.community_domain;
     if host == *domain || host == format!("auth.{domain}") {
         return Ok(StatusCode::OK);

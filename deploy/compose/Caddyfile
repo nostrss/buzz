@@ -1,5 +1,33 @@
-{$BUZZ_DOMAIN} {
+# Hosted mode: BUZZ_DOMAIN is the root every community hangs under
+# (team.<BUZZ_DOMAIN>). Certificates are issued on demand, one per host, but
+# only for hosts the account service vouches for (the root, auth., and
+# communities it created), so random names cannot burn Let's Encrypt quota.
+{
+  on_demand_tls {
+    ask http://account:3100/v1/hosts/check
+  }
+}
+
+{$BUZZ_DOMAIN}, *.{$BUZZ_DOMAIN} {
+  tls {
+    on_demand
+  }
   encode zstd gzip
 
-  reverse_proxy relay:3000
+  # Account service (email login, community creation).
+  @account host auth.{$BUZZ_DOMAIN}
+  handle @account {
+    reverse_proxy account:3100
+  }
+
+  # The relay's operator control plane is reachable only from the Docker
+  # network (the account service calls it directly). Never proxy it.
+  @operator path /operator/*
+  handle @operator {
+    respond 404
+  }
+
+  handle {
+    reverse_proxy relay:3000
+  }
 }

@@ -48,6 +48,30 @@ keypair.
 
 Run `./run.sh backup-hint` for the backup checklist.
 
+## Hosted mode
+
+The fork serves many communities from one stack: each community is a host
+under `BUZZ_DOMAIN` (`team.app.example.com`), created by the account service
+(`auth.<BUZZ_DOMAIN>`, secrets in `.env.account`). Requirements:
+
+- **DNS**: an `A` record for `BUZZ_DOMAIN` and a wildcard `A` record for
+  `*.<BUZZ_DOMAIN>`, both pointing at the host. With Cloudflare, keep the
+  proxy **off** (DNS only): Caddy terminates TLS itself.
+- **TLS**: Caddy issues one certificate per host on demand, on the first
+  request. Before issuing it asks `GET http://account:3100/v1/hosts/check`;
+  only the root, `auth.`, and hosts the account service created get a
+  certificate, so unknown names never reach Let's Encrypt.
+- **Routing**: `auth.<BUZZ_DOMAIN>` goes to the account service, every other
+  host to the relay. `/operator/*` on the relay is answered `404` by Caddy;
+  the account service calls it over the Docker network only.
+- **Email**: create the domain in [Resend](https://resend.com), add the SPF,
+  DKIM, and DMARC records it shows to DNS, and wait for verification before
+  setting `ACCOUNT_EMAIL_FROM`. Unverified senders land in spam or are refused.
+- **Relay config**: `RELAY_OPERATOR_PUBKEYS`, `RELAY_OPERATOR_API_ORIGIN`
+  (`http://relay:3000`, identical to the account service's
+  `ACCOUNT_RELAY_URL`), and `BUZZ_MAX_COMMUNITIES_PER_OWNER=1` in `.env`;
+  `ACCOUNT_COMMUNITY_DOMAIN=<BUZZ_DOMAIN>` in `.env.account`.
+
 ## Validation
 
 Before sharing an install link publicly, verify a fresh install with:

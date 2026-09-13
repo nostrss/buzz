@@ -7,6 +7,9 @@ services:
     depends_on:
       relay:
         condition: service_healthy
+      # On-demand TLS asks the account service which hosts may get a cert.
+      account:
+        condition: service_healthy
     environment:
       BUZZ_DOMAIN: ${BUZZ_DOMAIN:?set BUZZ_DOMAIN}
     ports:

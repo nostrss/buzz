@@ -270,6 +270,15 @@ async fn hosts_check_answers_caddy() {
         let (status, _) = h.get(&format!("/v1/hosts/check?host={host}"), None).await;
         assert_eq!(status, 404, "{host}");
     }
+    // Caddy's on-demand TLS `ask` uses `?domain=`.
+    let (status, _) = h
+        .get("/v1/hosts/check?domain=auth.app.test.invalid", None)
+        .await;
+    assert_eq!(status, 200);
+    let (status, _) = h
+        .get("/v1/hosts/check?domain=nobody.app.test.invalid", None)
+        .await;
+    assert_eq!(status, 404);
     let (status, _) = h.get("/v1/hosts/check", None).await;
     assert_eq!(status, 400);
 }
