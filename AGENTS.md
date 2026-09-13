@@ -25,8 +25,12 @@ instruction. When in doubt, ask first — never commit proactively.**
   curation.
 
 ```bash
-# take upstream changes
-git checkout main && git fetch upstream && git merge upstream/main && git push origin main
+# take upstream changes — always a merge commit with [skip ci]: main's
+# workflow files are upstream's, and they would otherwise run (and fail
+# their block/buzz-only gates) on every mirror push.
+git checkout main && git fetch upstream
+git merge --no-ff --signoff upstream/main -m "chore: sync upstream [skip ci]"
+git push origin main
 git checkout deploy && git merge main && git push origin deploy   # after review
 
 # fork development
@@ -37,15 +41,19 @@ git checkout deploy  # commit here (with -s), push triggers the image build
 
 - Repo variable `GHCR_IMAGE=ghcr.io/nostrss/buzz` points the upstream
   `docker.yml` at the fork's registry (no workflow fork needed for that).
-- `docker.yml` on `deploy` differs from upstream in two ways: it triggers
-  on the `deploy` branch (not `main`), and it skips the same-SHA CI
+- `docker.yml` on `deploy` differs from upstream in three ways: it triggers
+  on the `deploy` branch (not `main`); it skips the same-SHA CI
   qualification gate outside `block/buzz` (fork runners cannot reliably
   run the integration lanes — anonymous Docker Hub pulls are
-  rate-limited). A successful image build alone publishes
-  `ghcr.io/nostrss/buzz:deploy`.
-- Other upstream workflows (Sprig, canaries, etc.) are irrelevant to the
-  fork; their failures on fork pushes can be ignored or the workflows
-  disabled in the Actions UI.
+  rate-limited); and the push-gateway jobs are gated to `block/buzz`.
+  A successful image build alone publishes `ghcr.io/nostrss/buzz:deploy`.
+- `deploy.yml` (fork-only) runs after a successful "Docker image" run on
+  `deploy`: SSH to the host (`DEPLOY_SSH_KEY` / `DEPLOY_HOST` secrets),
+  `./run.sh upgrade`, then poll `/_readiness`. So `git push origin deploy`
+  is a production deploy.
+- Only "Docker image" and "Deploy relay" trigger on `deploy`. The other
+  upstream workflows trigger on `main`, which is why upstream syncs are
+  pushed with `[skip ci]` (see above).
 
 ### Production relay
 
@@ -54,8 +62,15 @@ git checkout deploy  # commit here (with -s), push triggers the image build
 - Deployment bundle: `deploy/compose/` on the server at
   `/root/buzz/deploy/compose` with `BUZZ_IMAGE=ghcr.io/nostrss/buzz:deploy`
   and `BUZZ_COMPOSE_TLS=true` (Caddy + Let's Encrypt).
-- Deploy loop: push to `deploy` → Actions builds the image → on the
-  server `BUZZ_COMPOSE_TLS=true ./run.sh upgrade`.
+- Deploy loop: push to `deploy` → Actions builds the image → `deploy.yml`
+  runs `BUZZ_COMPOSE_TLS=true ./run.sh upgrade` on the server. Manual
+  fallback: SSH in and run the same command.
+- Runtime config lives only in the server's `deploy/compose/.env` (not in
+  git). `BUZZ_CORS_ORIGINS` must include `tauri://localhost` (and
+  `http://tauri.localhost`) or the desktop app's invite/join-policy calls
+  fail CORS preflight ("Couldn't create invite link").
+- MinIO images come from `quay.io/minio/*` — Docker Hub no longer serves
+  them (fixed in `deploy/compose/compose.yml` on `deploy`).
 - Closed relay: `BUZZ_REQUIRE_RELAY_MEMBERSHIP=true`. Members join via
   in-app invite links, or `./run.sh add-member <npub>` on the server.
 - The owner key is a server-generated break-glass admin key
