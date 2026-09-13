@@ -27,6 +27,9 @@ pub struct Config {
     pub email_from: String,
     /// Domain suffix communities are created under, e.g. `app.pegboard.me`. `ACCOUNT_COMMUNITY_DOMAIN`.
     pub community_domain: String,
+    /// Scheme of the relay URL handed to clients. `ACCOUNT_RELAY_PUBLIC_SCHEME`,
+    /// default `wss`; `ws` only for local stacks without TLS.
+    pub relay_public_scheme: String,
 }
 
 impl std::fmt::Debug for Config {
@@ -107,6 +110,17 @@ impl Config {
             ));
         }
 
+        let relay_public_scheme = env
+            .get("ACCOUNT_RELAY_PUBLIC_SCHEME")
+            .map(|s| s.trim().to_ascii_lowercase())
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| "wss".to_owned());
+        if relay_public_scheme != "wss" && relay_public_scheme != "ws" {
+            return Err(invalid("ACCOUNT_RELAY_PUBLIC_SCHEME")(
+                &"expected ws or wss",
+            ));
+        }
+
         Ok(Self {
             bind_addr,
             database_url: required("ACCOUNT_DATABASE_URL")?.to_owned(),
@@ -117,6 +131,7 @@ impl Config {
             resend_base_url,
             email_from: required("ACCOUNT_EMAIL_FROM")?.to_owned(),
             community_domain,
+            relay_public_scheme,
         })
     }
 }
@@ -173,6 +188,29 @@ mod tests {
                 Some(ConfigError::Missing(name))
             );
         }
+    }
+
+    #[test]
+    fn relay_public_scheme_defaults_to_wss_and_rejects_others() {
+        assert_eq!(
+            Config::from_map(&valid())
+                .expect("valid config")
+                .relay_public_scheme,
+            "wss"
+        );
+        let mut env = valid();
+        env.insert("ACCOUNT_RELAY_PUBLIC_SCHEME".into(), "ws".into());
+        assert_eq!(
+            Config::from_map(&env)
+                .expect("ws allowed")
+                .relay_public_scheme,
+            "ws"
+        );
+        env.insert("ACCOUNT_RELAY_PUBLIC_SCHEME".into(), "http".into());
+        assert!(matches!(
+            Config::from_map(&env),
+            Err(ConfigError::Invalid("ACCOUNT_RELAY_PUBLIC_SCHEME", _))
+        ));
     }
 
     #[test]

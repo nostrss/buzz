@@ -114,10 +114,10 @@ async fn relay_call(
             .header(reqwest::header::CONTENT_TYPE, "application/json")
             .body(bytes);
     }
-    let res = req
-        .send()
-        .await
-        .map_err(|e| ApiError::internal("relay unreachable", e))?;
+    let res = req.send().await.map_err(|e| {
+        tracing::warn!(error = %e, "relay unreachable");
+        ApiError::new(StatusCode::BAD_GATEWAY, "relay_error").with("message", "relay unreachable")
+    })?;
     let status = res.status();
     let json = res
         .json::<serde_json::Value>()
@@ -281,7 +281,7 @@ pub async fn create(
     Ok((
         StatusCode::CREATED,
         Json(CreateResponse {
-            relay_url: format!("wss://{host}"),
+            relay_url: format!("{}://{host}", state.config.relay_public_scheme),
             host,
             community_id: relay_community_id.to_string(),
         }),
