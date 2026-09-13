@@ -12,7 +12,7 @@ use axum::{
 };
 use sqlx::PgPool;
 
-use crate::{crypto::KeyVault, login, mail::Mailer, Config};
+use crate::{community, crypto::KeyVault, login, mail::Mailer, Config};
 
 /// Shared handler state.
 #[derive(Clone)]
@@ -21,6 +21,8 @@ pub struct AppState {
     pub config: Arc<Config>,
     pub vault: KeyVault,
     pub mailer: Mailer,
+    /// Client for the relay's operator API.
+    pub relay: reqwest::Client,
 }
 
 impl AppState {
@@ -32,11 +34,15 @@ impl AppState {
             config.resend_api_key.clone(),
             config.email_from.clone(),
         )?;
+        let relay = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(10))
+            .build()?;
         Ok(Self {
             pool,
             config: Arc::new(config),
             vault,
             mailer,
+            relay,
         })
     }
 }
@@ -50,6 +56,9 @@ pub fn router(state: AppState) -> Router {
         .route("/v1/login/verify", post(login::verify))
         .route("/v1/logout", post(login::logout))
         .route("/v1/me", get(login::me))
+        .route("/v1/communities/check", post(community::check))
+        .route("/v1/communities", post(community::create))
+        .route("/v1/hosts/check", get(community::hosts_check))
         .with_state(state)
 }
 

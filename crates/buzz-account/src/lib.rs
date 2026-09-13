@@ -5,6 +5,7 @@
 //! communities on the relay with the operator key. This crate is fork-only;
 //! the relay is never modified for it.
 
+pub mod community;
 pub mod config;
 pub mod crypto;
 pub mod db;
