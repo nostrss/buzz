@@ -43,6 +43,15 @@ on:
   push:
     branches: [deploy]
     tags: ["relay-v[0-9]*"]
+    # Fork: desktop, mobile, and docs never reach the relay/account images, so
+    # a push touching only those must not rebuild and redeploy the server.
+    # Use workflow_dispatch to force a rebuild after such a push.
+    paths-ignore:
+      - "desktop/**"
+      - "mobile/**"
+      - "docs/**"
+      - "**/*.md"
+      - "CONTEXT.md"
   pull_request:
     paths:
       - "Dockerfile"
