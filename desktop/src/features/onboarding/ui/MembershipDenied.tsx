@@ -1,7 +1,9 @@
 import * as React from "react";
 import { Check, Copy, KeyRound, ShieldX, Ticket } from "lucide-react";
 
+import { hostedLogout } from "@/features/hosted-account/api";
 import { useCommunityOnboarding } from "@/features/onboarding/communityOnboarding";
+import { hostedAccountUrl } from "@/shared/config/hostedAccount";
 import { nsecToNpub } from "@/shared/lib/nostrUtils";
 import { canonicalNpub, UNAVAILABLE_KEY_LABEL } from "@/shared/lib/pubkey";
 import { Badge } from "@/shared/ui/badge";
@@ -49,6 +51,28 @@ export function MembershipDenied({
 
   const [isInviteFormOpen, setIsInviteFormOpen] = React.useState(false);
   const communityOnboarding = useCommunityOnboarding();
+
+  // Fork: with the hosted account service, the way out of a stale local
+  // identity is to sign in with email again (wipes this machine and
+  // relaunches), not to paste a different key.
+  const hostedUrl = hostedAccountUrl();
+  const [isHostedSigningIn, setIsHostedSigningIn] = React.useState(false);
+  const [hostedSignInError, setHostedSignInError] = React.useState<
+    string | null
+  >(null);
+  const signInWithEmail = React.useCallback(async () => {
+    if (!hostedUrl) return;
+    setIsHostedSigningIn(true);
+    setHostedSignInError(null);
+    try {
+      await hostedLogout(hostedUrl);
+    } catch (caught) {
+      setHostedSignInError(
+        caught instanceof Error ? caught.message : String(caught),
+      );
+      setIsHostedSigningIn(false);
+    }
+  }, [hostedUrl]);
 
   const handleCopy = React.useCallback(async () => {
     if (!identityNpub) return;
@@ -277,18 +301,40 @@ export function MembershipDenied({
                 <Ticket className="h-4 w-4" />
                 Have an invite?
               </button>
-              <button
-                className="flex w-full items-center justify-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
-                data-testid="membership-denied-change-key"
-                onClick={() => {
-                  setImportError(null);
-                  setIsImportFormOpen(true);
-                }}
-                type="button"
-              >
-                <KeyRound className="h-4 w-4" />
-                Use a different key
-              </button>
+              {hostedUrl ? (
+                <>
+                  <button
+                    className="flex w-full items-center justify-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground disabled:opacity-60"
+                    data-testid="membership-denied-hosted-sign-in"
+                    disabled={isHostedSigningIn}
+                    onClick={() => void signInWithEmail()}
+                    type="button"
+                  >
+                    <KeyRound className="h-4 w-4" />
+                    {isHostedSigningIn
+                      ? "Signing out…"
+                      : "Sign in with email instead"}
+                  </button>
+                  {hostedSignInError ? (
+                    <p className="text-xs text-destructive" role="alert">
+                      {hostedSignInError}
+                    </p>
+                  ) : null}
+                </>
+              ) : (
+                <button
+                  className="flex w-full items-center justify-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
+                  data-testid="membership-denied-change-key"
+                  onClick={() => {
+                    setImportError(null);
+                    setIsImportFormOpen(true);
+                  }}
+                  type="button"
+                >
+                  <KeyRound className="h-4 w-4" />
+                  Use a different key
+                </button>
+              )}
             </>
           )}
         </div>

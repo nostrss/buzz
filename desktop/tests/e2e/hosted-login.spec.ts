@@ -1,6 +1,7 @@
 import { expect, type Page, test } from "@playwright/test";
 
-import { installMockBridge } from "../helpers/bridge";
+import { installMockBridge, TEST_IDENTITIES } from "../helpers/bridge";
+import { seedActiveIdentity } from "../helpers/onboarding";
 
 // Fork: email + 6-digit code login replaces the identity-key onboarding when
 // the hosted account service URL is configured. The mock bridge accepts the
@@ -9,6 +10,7 @@ import { installMockBridge } from "../helpers/bridge";
 const HOSTED_URL = "https://auth.app.test.invalid";
 const HOSTED_SESSION_KEY = "buzz-e2e-hosted-session";
 const TRANSACTION_STORAGE_KEY = "buzz-community-onboarding-transaction.v1";
+const BLANK_TYLER_IDENTITY = { ...TEST_IDENTITIES.tyler, username: "" };
 
 async function enableHostedAccount(page: Page) {
   await page.addInitScript((url) => {
@@ -297,6 +299,69 @@ test("hosted mode hides every key surface in settings and routes sign-out", asyn
   await page.getByTestId("signout-confirm-phrase").fill("wipe all my data");
   await expect(page.getByTestId("signout-confirm")).toBeEnabled();
   await page.getByTestId("signout-confirm").click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        (key) => window.localStorage.getItem(key),
+        HOSTED_SESSION_KEY,
+      ),
+    )
+    .toBeNull();
+});
+
+test("a stale identity refused by the relay can switch to email sign-in", async ({
+  page,
+}) => {
+  await enableHostedAccount(page);
+  await seedActiveIdentity(page, BLANK_TYLER_IDENTITY);
+  await page.addInitScript(
+    ({ pubkey, transactionKey, sessionKey }) => {
+      window.localStorage.setItem(
+        `buzz-machine-onboarding-complete.v2:${pubkey}`,
+        "true",
+      );
+      window.localStorage.setItem(
+        sessionKey,
+        JSON.stringify({ email: "old@x.io" }),
+      );
+      const timestamp = new Date().toISOString();
+      window.localStorage.setItem(
+        transactionKey,
+        JSON.stringify({
+          id: "txn-membership-denied-hosted",
+          source: "first-community",
+          stage: "profile",
+          relayUrl: "wss://denied.example.com",
+          communityName: "Denied",
+          communityId: "e2e-default-community",
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        }),
+      );
+    },
+    {
+      pubkey: BLANK_TYLER_IDENTITY.pubkey,
+      transactionKey: TRANSACTION_STORAGE_KEY,
+      sessionKey: HOSTED_SESSION_KEY,
+    },
+  );
+  await installMockBridge(
+    page,
+    {
+      profileUpdateError:
+        "relay returned 403 Forbidden: You must be a relay member to access this relay",
+    },
+    { relayWsUrl: "wss://denied.example.com", skipOnboardingSeed: true },
+  );
+  await page.goto("/");
+
+  await page.getByTestId("community-profile-name-key").fill("Kalvin");
+  await page.getByTestId("community-profile-next").click();
+  await expect(page.getByTestId("membership-denied")).toBeVisible();
+
+  // Hosted mode offers email sign-in and hides the raw-key import.
+  await expect(page.getByTestId("membership-denied-change-key")).toHaveCount(0);
+  await page.getByTestId("membership-denied-hosted-sign-in").click();
   await expect
     .poll(() =>
       page.evaluate(
