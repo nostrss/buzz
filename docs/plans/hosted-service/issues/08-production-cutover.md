@@ -13,7 +13,7 @@
 - [x] `deploy`를 `d2ef9df50`으로 fast-forward push. CI run 34760113907: 릴레이·계정 서비스 이미지 게시(둘 다 익명 pull 가능), 배포 잡 성공. 전환 후 `https://app.pegboard.me/_readiness`, `https://auth.app.pegboard.me/_readiness` 모두 200, TLS 검증 0.
 - [x] 결정 변경: 루트 `app.pegboard.me`를 팀 커뮤니티로 특별 처리하지 않는다. 릴레이가 자동 생성한 루트 커뮤니티는 비워 두고, 팀은 다른 고객과 같은 앱 경로로 `<이름>.app.pegboard.me`를 만든다(사용자가 이름을 정해 직접 생성 예정).
 - [ ] 팀원 전원이 새 DMG(`d2ef9df50` 기준, `desktop/.env.production` 포함)로 이메일 로그인 후 초대 링크로 재가입한다. 사용자가 서명된 DMG를 빌드 중이며 배포는 사용자 진행.
-- [x] `auth.app.pegboard.me` 첫 요청에 Let's Encrypt 인증서가 on-demand로 발급됨(Caddy 로그 "certificate obtained successfully"). `nope.app.pegboard.me`는 TLS 핸드셰이크 실패(curl exit 35)로 인증서 미발급 확인. `/operator/communities`는 Caddy에서 404. 실제 Resend로 `POST /v1/login/start` → `{"status":"sent"}`. 새 커뮤니티 생성은 팀 커뮤니티 생성으로 확인 예정.
+- [x] `auth.app.pegboard.me` 첫 요청에 Let's Encrypt 인증서가 on-demand로 발급됨(Caddy 로그 "certificate obtained successfully"). `nope.app.pegboard.me`는 TLS 핸드셰이크 실패(curl exit 35)로 인증서 미발급 확인. `/operator/communities`는 Caddy에서 404. 실제 Resend로 `POST /v1/login/start` → `{"status":"sent"}`. 2026-09-16 사용자가 앱에서 `first.app.pegboard.me`를 생성: Caddy가 인증서를 on-demand 발급했고 HTTPS 200, 스타터 채널 3개 생성, hosts/check 200 확인.
 - [x] 백업 대상: `deploy/compose/.env`, `deploy/compose/.env.account`, Postgres(`buzz`, `buzz_account`), MinIO, git 볼륨. `run.sh backup-hint`에 `.env.account`가 포함된다.
 
 **후속 (범위 밖, 기록용)**: 만료 코드·세션 청소 작업, 로그인 시작의 IP 기준 제한, 메일 발송 실패 알림. 로컬 검증용 `.env` 변경(RELAY_URL=ws://localtest.me 등)은 gitignored 로컬 파일이라 되돌릴 필요 없음.
